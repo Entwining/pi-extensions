@@ -1,0 +1,60 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:best-practices", "schedule:daily"],
+  "timezone": "Asia/Singapore",
+  "description": [
+    "main has no required status checks, so platformAutomerge stays false and Renovate waits for PR checks before merging.",
+    "semantic-release releases from commit types, so semanticCommits is enabled instead of detected from recent commits: updates to package.json dependencies commit as fix and release a patch, and other updates commit as chore.",
+    "Pi often releases more than once a week, and the footer adapter depends on its internals, so updates are checked daily.",
+    "config:best-practices sets the npm release age through security:minimumReleaseAgeNpm. A pin younger than the workflow's --min-release-age fails its resolution check unless the check exempts the package, because npm also resolves the dev dependencies that Pi's Git installation omits."
+  ],
+  "semanticCommits": "enabled",
+  "platformAutomerge": false,
+  "lockFileMaintenance": { "automerge": true },
+  "packageRules": [
+    {
+      "description": "Renovate puts major updates on a separate branch, so a failing major does not hold back minor and patch updates.",
+      "matchUpdateTypes": ["major", "minor", "patch", "pin", "pinDigest", "digest"],
+      "groupName": "Routine dependencies",
+      "automerge": true
+    },
+    {
+      "description": "The Pi host pins its TUI to the same version, and the footer adapter depends on Pi internals. Pi updates wait one day instead of three; the workflow's npm check accepts them because it exempts @earendil-works packages, as Pi's own npmCommand does.",
+      "matchPackageNames": ["@earendil-works/pi-coding-agent", "@earendil-works/pi-tui"],
+      "groupName": "Pi",
+      "minimumReleaseAge": "1 day"
+    },
+    {
+      "description": "CI tests with the Bun version in packageManager, and @types/bun follows Bun's version numbers.",
+      "matchPackageNames": ["bun", "@types/bun"],
+      "groupName": "Bun"
+    },
+    {
+      "description": "oxlint and oxfmt ship together from the Oxc repository, and oxfmt minor releases can change formatting.",
+      "matchPackageNames": ["oxlint", "oxfmt"],
+      "groupName": "Oxc"
+    },
+    {
+      "description": "TypeScript minor releases can add type errors.",
+      "matchPackageNames": ["typescript"],
+      "groupName": "TypeScript"
+    },
+    {
+      "description": "semantic-release ships coordinated majors with its plugins, and each plugin major supports only certain conventional-changelog preset majors.",
+      "matchPackageNames": [
+        "semantic-release",
+        "@semantic-release/commit-analyzer",
+        "@semantic-release/release-notes-generator",
+        "@semantic-release/github",
+        "conventional-changelog-conventionalcommits"
+      ],
+      "groupName": "semantic-release"
+    },
+    {
+      "description": "The release test runs commit analysis and release notes in a dry run, but no PR check runs the publishing path of the semantic-release core or GitHub plugin.",
+      "matchPackageNames": ["semantic-release", "@semantic-release/github"],
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    }
+  ]
+}

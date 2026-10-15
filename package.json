@@ -1,0 +1,45 @@
+{
+  "name": "@entwining/pi-extensions",
+  "private": true,
+  "description": "Pi extensions for inline skill invocation, session IDs in the footer, Agent Guard tool-call checks, and a reasoning workaround.",
+  "keywords": [
+    "pi-package"
+  ],
+  "license": "MIT",
+  "repository": "github:Entwining/pi-extensions",
+  "type": "module",
+  "scripts": {
+    "check": "bun run fmt:check && bun run lint && bun run typecheck && bun test",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check",
+    "lint": "oxlint --report-unused-disable-directives-severity=error",
+    "release": "semantic-release",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "1.2.0",
+    "@earendil-works/pi-tui": "1.2.0",
+    "@semantic-release/commit-analyzer": "13.0.1",
+    "@semantic-release/github": "12.0.10",
+    "@semantic-release/release-notes-generator": "14.1.1",
+    "@types/bun": "1.4.3",
+    "conventional-changelog-conventionalcommits": "9.3.1",
+    "oxfmt": "0.72.0",
+    "oxlint": "1.87.0",
+    "semantic-release": "25.0.9",
+    "typescript": "7.0.2"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "packageManager": "bun@1.4.3",
+  "pi": {
+    "extensions": [
+      "./extensions/agent-guard.ts",
+      "./extensions/inline-skill-invocation.ts",
+      "./extensions/session-id-footer.ts",
+      "./extensions/strip-reasoning-filler.ts"
+    ]
+  }
+}
