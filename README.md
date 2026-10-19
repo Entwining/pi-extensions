@@ -1,6 +1,6 @@
 # Pi Extensions
 
-Extensions for [Pi](https://pi.dev/) that add inline skill invocation, session IDs in the footer, an [Agent Guard](https://github.com/Entwining/agent-guard) check of tool calls, and a model-specific reasoning workaround. Each extension can be enabled independently.
+Extensions for [Pi](https://pi.dev/) that add inline skill invocation, session IDs in the footer, an [Agent Guard](https://github.com/Entwining/agent-guard) check of tool calls, and a DeepSeek reasoning workaround. Each extension can be enabled independently.
 
 ## Extensions
 
@@ -9,9 +9,9 @@ Extensions for [Pi](https://pi.dev/) that add inline skill invocation, session I
 | [`agent-guard.ts`](extensions/agent-guard.ts)                         | Translates Pi shell, file, and search tool calls into Agent Guard events and runs `/opt/homebrew/bin/agent-guard`. A call is blocked when the guard rejects it or cannot complete its check. Agent Guard owns the rules and the [reason markers](https://github.com/Entwining/agent-guard/blob/main/docs/setup.md#reason-markers) in each block; this extension owns the Pi adapter. |
 | [`inline-skill-invocation.ts`](extensions/inline-skill-invocation.ts) | Completes and highlights `/skill-name` mentions inside interactive prompts. The first skill mentioned outside code is invoked through Pi's native [`/skill:name` command](https://pi.dev/docs/latest/skills#understand-how-skills-load); other mentions are named to the model, which decides whether they request a skill. Existing leading Pi commands stay in place.              |
 | [`session-id-footer.ts`](extensions/session-id-footer.ts)             | Inserts the session ID below the working directory while retaining Pi's footer statistics and extension statuses.                                                                                                                                                                                                                                                                    |
-| [`strip-reasoning-filler.ts`](extensions/strip-reasoning-filler.ts)   | Removes interjections and repeated standalone filler from replayed reasoning for `deepseek/deepseek-v4.1-flash`. It modifies the request copy, preserves the recorded transcript, and depends on the provider's `reasoning_details` format. Disable or remove it when that workaround is no longer needed.                                                                           |
+| [`strip-reasoning-filler.ts`](extensions/strip-reasoning-filler.ts)   | Removes interjections and repeated standalone filler from replayed reasoning for DeepSeek models. It modifies the request copy, preserves the recorded transcript, and depends on the provider's `reasoning_details` format. Disable or remove it when that workaround is no longer needed.                                                                                          |
 
-The editor and footer extensions replace parts of Pi's terminal UI. Other extensions replacing the same components can affect their composition. The reasoning extension does nothing for other model IDs.
+The editor and footer extensions replace parts of Pi's terminal UI. Other extensions replacing the same components can affect their composition. The reasoning extension does nothing for other models.
 
 ## Install
 

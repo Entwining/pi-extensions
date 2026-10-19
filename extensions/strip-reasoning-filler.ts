@@ -15,7 +15,7 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 //
 // If Pi changes how it replays reasoning, this stops taking effect without an error.
 // Remove it once the model no longer continues filler it is shown.
-const MODEL_ID = 'deepseek/deepseek-v4.1-flash';
+
 // Quoted, code and path uses ("`hmm`", "/tmp/hmm.txt", "hmm-model") are content.
 const INTERJECTION = /(?<![`"'/])(?:嗯+|\b[Hh]mm+\b)(?![`"'/]|[.-]\w)[。，,.!！?？…—:：;；-]*\s*/g;
 // A fence may open after list or quote markers ("- ```", "> ~~~").
@@ -93,7 +93,11 @@ export default function stripReasoningFiller(pi: ExtensionAPI) {
   // The request Pi has built already applies its replay rules: only the same model's
   // reasoning, without errored or aborted turns, one signed thinking block per message.
   pi.on('before_provider_request', (event, ctx) => {
-    if (ctx.model?.id !== MODEL_ID) return;
+    // Matching the vendor rather than one model ID keeps later snapshots of the looping
+    // model covered; on DeepSeek models that do not loop, the filter removes little beyond
+    // interjections. Models from other vendors have not shown the repetition loop, and some
+    // repeat status sentences that this filter would remove.
+    if (!ctx.model?.id.includes('deepseek')) return;
     const payload = event.payload;
     if (!isRecord(payload) || !Array.isArray(payload.messages)) return;
     const messages: unknown[] = payload.messages;
