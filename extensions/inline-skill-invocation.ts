@@ -25,6 +25,8 @@ const MENTION = new RegExp(
 const TRAILING_FRAGMENT = new RegExp(String.raw`${INLINE_BOUNDARY}\/([a-z0-9-]+)$`, 'u');
 const ENDED_MENTION = new RegExp(String.raw`${INLINE_BOUNDARY}\/(?:[a-z0-9-]+[^a-z0-9-])?$`, 'u');
 const TOKEN_SUFFIX = /^[a-z0-9-]*/;
+const MARK = '\uFDD0';
+const MARKED_MENTION = new RegExp(`${MARK}([a-z0-9-]+)`, 'g');
 const markdown = new Marked();
 
 // EditorComponent omits these methods; tryTriggerAutocomplete is private in Pi's Editor.
@@ -45,20 +47,22 @@ function inlineFragment(before: string) {
 }
 
 // Skills mentioned outside Markdown code, in order and each once. Marked keeps prose in
-// text tokens and code out of them. A text token can start right after inline markup, as
-// in `**note**/commit`, so a name must also be a mention in the full text, which is what
-// the editor highlights.
+// text tokens and code out of them, but a text token can start right after inline markup,
+// as in `**note**/commit`, and tokens carry no source offsets. So mentions are found in the
+// full text and marked there before lexing: a "/" after a boundary is not Markdown syntax,
+// and the mark is a noncharacter, which typed text does not contain.
 function mentionedSkills(text: string, skills: ReadonlyMap<string, Skill>) {
-  const mentions = (source: string) =>
-    Array.from(source.matchAll(MENTION), (match) => match[1]!).filter((name) => skills.has(name));
-  const candidates = mentions(text);
+  const marked = text.replace(MENTION, (match, name: string) =>
+    skills.has(name) ? match.replace('/', MARK) : match,
+  );
   // Lexing costs far more than the scan, and most text mentions no skill.
-  if (candidates.length === 0) return [];
-  const found: string[] = [];
-  markdown.walkTokens(markdown.lexer(text), (token) => {
-    if (token.type === 'text' && !token.tokens?.length) found.push(...mentions(token.raw));
+  if (marked === text) return [];
+  const found = new Set<string>();
+  markdown.walkTokens(markdown.lexer(marked), (token) => {
+    if (token.type === 'text' && !token.tokens?.length)
+      for (const match of token.raw.matchAll(MARKED_MENTION)) found.add(match[1]!);
   });
-  return [...new Set(found)].filter((name) => candidates.includes(name));
+  return [...found];
 }
 
 function highlightMentions(
