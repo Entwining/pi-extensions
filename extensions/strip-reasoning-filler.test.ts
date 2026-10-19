@@ -16,17 +16,23 @@ stripReasoningFiller({
 } as unknown as ExtensionAPI);
 const context = { model: { id: 'deepseek/deepseek-v4.1-flash' } } as ExtensionContext;
 
-test.each(['deepseek/deepseek-v4.1-flash-new', undefined])(
-  'leaves model %s untouched',
-  async (id) => {
-    const payload = { messages: [{ reasoning_details: [{ text: 'Hmm, important reasoning.' }] }] };
-    expect(
-      await handler({ type: 'before_provider_request', payload }, {
-        model: id ? { id } : undefined,
-      } as ExtensionContext),
-    ).toBeUndefined();
-  },
-);
+test('applies to every DeepSeek model ID', async () => {
+  const payload = { messages: [{ reasoning_details: [{ text: 'Hmm, important reasoning.' }] }] };
+  expect(
+    await handler({ type: 'before_provider_request', payload }, {
+      model: { id: 'deepseek/deepseek-v4-pro-0813' },
+    } as ExtensionContext),
+  ).toEqual({ messages: [{ reasoning_details: [{ text: 'important reasoning.' }] }] });
+});
+
+test.each(['zai/glm-5.3', undefined])('leaves model %s untouched', async (id) => {
+  const payload = { messages: [{ reasoning_details: [{ text: 'Hmm, important reasoning.' }] }] };
+  expect(
+    await handler({ type: 'before_provider_request', payload }, {
+      model: id ? { id } : undefined,
+    } as ExtensionContext),
+  ).toBeUndefined();
+});
 
 test('deduplicates standalone filler across messages without mutating its input', async () => {
   const payload = {

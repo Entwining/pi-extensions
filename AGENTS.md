@@ -7,7 +7,7 @@ This repository distributes one Pi Git package. Each production file in `extensi
 - Import Pi APIs only through public package roots. Pi supplies its host packages at runtime, so keep them as `"*"` peers and pin the versions exercised by CI in `devDependencies`.
 - [`agent-guard.ts`](extensions/agent-guard.ts) translates events and preserves failure-as-block behavior. Guard rules and the executable belong to [Agent Guard](https://github.com/Entwining/agent-guard); do not reproduce those rules here.
 - The footer reuses Pi's `FooterComponent` through a partial session adapter because the extension context does not expose an `AgentSession`. Changes to that adapter need a real component render check; a type assertion does not verify its runtime contract.
-- The reasoning workaround is limited to its exact model ID and provider payload. Preserve the stored transcript and code when changing replayed reasoning.
+- The reasoning workaround is limited to DeepSeek models and their provider payload. Preserve the stored transcript and code when changing replayed reasoning.
 
 ## Validation and delivery
 
