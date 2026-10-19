@@ -85,6 +85,17 @@ describe('inline skill invocation', () => {
     });
   });
 
+  test.each([
+    ['after inline markup', '**note**/commit\n\n```text\n /commit\n```', { action: 'continue' }],
+    [
+      'in prose',
+      'see /commit\n\n```text\n /commit\n```',
+      { action: 'transform', text: '/skill:commit see /commit\n\n```text\n /commit\n```' },
+    ],
+  ])('judges a name %s by that occurrence, not by its copy in code', (_name, text, expected) => {
+    expect(submit(text)).toEqual(expected);
+  });
+
   test('skips a mention hidden in a collapsed paste', () => {
     const text = 'Log: GET /commit 200\nThen /review it';
     editorText = 'Log: [paste #1 +12 lines]\nThen /review it';
