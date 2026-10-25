@@ -26,7 +26,7 @@ test('applies to every DeepSeek model ID', async () => {
   ).toEqual({ messages: [{ reasoning_details: [{ text: 'important reasoning.' }] }] });
 });
 
-test.each(['zai/glm-5.3', undefined])('leaves model %s untouched', async (id) => {
+test.each(['zai/glm-5.3', undefined])('leaves model %p untouched', async (id) => {
   const payload = { messages: [{ reasoning_details: [{ text: 'Hmm, important reasoning.' }] }] };
   expect(
     await handler({ type: 'before_provider_request', payload }, {
