@@ -18,8 +18,9 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
 // Quoted, code and path uses ("`hmm`", "/tmp/hmm.txt", "hmm-model") are content.
 const INTERJECTION = /(?<![`"'/])(?:嗯+|\b[Hh]mm+\b)(?![`"'/]|[.-]\w)[。，,.!！?？…—:：;；-]*\s*/g;
-// A fence may open after list or quote markers ("- ```", "> ~~~").
-const FENCE = /^((?:[ \t]*(?:[-*+]|\d+[.)])[ \t]+|[ \t]*>[ \t]?)*[ \t]*)(`{3,}|~{3,})/;
+// A fence may open after list or quote markers ("- ```", "> ~~~"). Only the whitespace
+// before each marker is consumed, so a run of markers without a fence fails in linear time.
+const FENCE = /^((?:[ \t]*(?:(?:[-*+]|\d+[.)])(?=[ \t])|>))*[ \t]*)(`{3,}|~{3,})/;
 const MIN_FILLER_REPEATS = 3;
 
 // No ASCII ")": it would admit standalone code such as "run(x)", and no filler has

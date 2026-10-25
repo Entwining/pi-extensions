@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { expect, test } from 'bun:test';
 import type {
   BeforeProviderRequestEvent,
@@ -99,6 +100,46 @@ test('preserves fenced code and repeated list items', async () => {
   ].join('\n');
   const payload = { messages: [{ reasoning_details: [{ text }] }] };
   expect(await handler({ type: 'before_provider_request', payload }, context)).toEqual(payload);
+});
+
+test('recognizes fences opened and closed after list and quote markers', async () => {
+  const fence = ['- 1. 2) + * >\t~~~text', '> Hmm, Let me do it.', '- 1. 2) + * >~~~'];
+  const payload = {
+    messages: [{ reasoning_details: [{ text: [...fence, 'Hmm, outside.'].join('\n') }] }],
+  };
+  expect(await handler({ type: 'before_provider_request', payload }, context)).toEqual({
+    messages: [{ reasoning_details: [{ text: [...fence, 'outside.'].join('\n') }] }],
+  });
+});
+
+test('treats a list marker without following whitespace as prose', async () => {
+  const payload = {
+    messages: [{ reasoning_details: [{ text: '-```\nHmm, important reasoning.' }] }],
+  };
+  expect(await handler({ type: 'before_provider_request', payload }, context)).toEqual({
+    messages: [{ reasoning_details: [{ text: '-```\nimportant reasoning.' }] }],
+  });
+});
+
+// A fence prefix that lets markers share whitespace backtracks exponentially when no fence
+// follows. On Node, which Pi runs on, such a match blocks until it ends, so the deadline is
+// enforced outside the process. Bun abandons a runaway match and reports no match, which
+// hides the regression.
+test('does not backtrack exponentially on long marker runs without a fence', () => {
+  const text = ['> ', '>\t', '-  ', '-\t\t'].map((marker) => `${marker.repeat(64)}x`).join('\n');
+  const payload = { messages: [{ reasoning_details: [{ text }] }] };
+  const script = `
+    const { default: stripReasoningFiller } = await import(${JSON.stringify(new URL('./strip-reasoning-filler.ts', import.meta.url).href)});
+    stripReasoningFiller({
+      on: (_event, handler) => console.log(JSON.stringify(handler(${JSON.stringify({ type: 'before_provider_request', payload })}, ${JSON.stringify(context)}))),
+    });
+  `;
+  const result = spawnSync('node', ['--input-type=module', '--eval', script], {
+    encoding: 'utf8',
+    timeout: 3_000,
+    killSignal: 'SIGKILL',
+  });
+  expect(result).toMatchObject({ status: 0, stdout: `${JSON.stringify(payload)}\n` });
 });
 
 test('keeps meaningful standalone repetition below the filler threshold', async () => {
