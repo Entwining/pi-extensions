@@ -24,6 +24,7 @@ const { stripTerminalSequences, visibleWidth } = await import('@earendil-works/p
 const hooks = new Map([
   ['agent-guard.ts', ['tool_call']],
   ['inline-skill-invocation.ts', ['context', 'input', 'session_start']],
+  ['sandbox.ts', ['session_shutdown', 'session_start', 'tool_call', 'user_bash']],
   ['session-id-footer.ts', ['session_start']],
   ['strip-reasoning-filler.ts', ['before_provider_request']],
 ]);
