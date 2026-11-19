@@ -6,6 +6,7 @@ This repository distributes one Pi Git package. Each production file in `extensi
 
 - Import Pi APIs only through public package roots. Pi supplies its host packages at runtime, so keep them as `"*"` peers and pin the versions exercised by CI in `devDependencies`.
 - [`agent-guard.ts`](extensions/agent-guard.ts) translates events and preserves failure-as-block behavior. Guard rules and the executable belong to [Agent Guard](https://github.com/Entwining/agent-guard); do not reproduce those rules here.
+- [`sandbox.ts`](extensions/sandbox.ts) adapts Pi's shell seams to [Sandbox Runtime](https://github.com/anthropics/sandbox-runtime), which owns the OS profile; do not hand-write Seatbelt or bubblewrap rules here. Every path that cannot apply the policy blocks the call, and the static `write`/`edit` check may be stricter than the profile but never looser. CI runs no real sandbox, so a change to the wrapper or a Sandbox Runtime update needs a check against the real sandbox on macOS.
 - The footer reuses Pi's `FooterComponent` through a partial session adapter because the extension context does not expose an `AgentSession`. Changes to that adapter need a real component render check; a type assertion does not verify its runtime contract.
 - The reasoning workaround is limited to DeepSeek models and their provider payload. Preserve the stored transcript and code when changing replayed reasoning.
 

@@ -11,5 +11,5 @@
     "allowImportingTsExtensions": true,
     "types": ["bun"]
   },
-  "include": ["extensions", "tests"]
+  "include": ["extensions", "lib", "tests"]
 }

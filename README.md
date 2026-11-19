@@ -1,6 +1,6 @@
 # Pi Extensions
 
-Extensions for [Pi](https://pi.dev/) that add inline skill invocation, session IDs in the footer, Agent Guard checks, and a DeepSeek reasoning workaround. Each extension can be enabled independently.
+Extensions for [Pi](https://pi.dev/) that add inline skill invocation, session IDs in the footer, Agent Guard checks, an OS sandbox for shell commands, and a DeepSeek reasoning workaround. Each extension can be enabled independently.
 
 ## Invoke skills inside a prompt
 
@@ -14,6 +14,10 @@ The [session footer](docs/usage.md#session-footer) adds the session ID below the
 
 The [Agent Guard adapter](docs/usage.md#agent-guard) checks shell, file, and search tool calls before they run. A rejected or failed check blocks the call. [Agent Guard](https://github.com/Entwining/agent-guard) owns the rules.
 
+## Sandbox shell commands
+
+The [command sandbox](docs/usage.md#os-sandbox) runs the `bash` tool and `!` commands inside a macOS Seatbelt sandbox built with [Sandbox Runtime](https://github.com/anthropics/sandbox-runtime). It holds `write` and `edit` to the same write policy. Pi and its other extensions stay outside it.
+
 ## Filter replayed DeepSeek reasoning
 
 The [reasoning workaround](docs/usage.md#deepseek-reasoning) removes interjections and repeated standalone filler from the request copy. It preserves the recorded transcript. It applies only to DeepSeek models.
@@ -24,7 +28,7 @@ The [reasoning workaround](docs/usage.md#deepseek-reasoning) removes interjectio
 pi install git:github.com/Entwining/pi-extensions
 ```
 
-This loads every extension in the package. The Agent Guard adapter requires Apple Silicon macOS and Agent Guard installed through Homebrew. Without it, every guarded tool call is blocked; [disable that extension or select only the extensions you need](docs/setup.md#install).
+This loads every extension in the package. The Agent Guard adapter requires Apple Silicon macOS and Agent Guard installed through Homebrew. Without it, every guarded tool call is blocked; [disable that extension or select only the extensions you need](docs/setup.md#install). The command sandbox blocks shell commands, `write`, and `edit` on systems other than macOS and until [its policy file](docs/usage.md#os-sandbox) exists.
 
 [Updates follow the default branch unless you pin a Git tag or commit](docs/setup.md#update). The package is distributed through Git, not npm.
 

@@ -22,8 +22,9 @@ function guardEvent(toolName: string, input: Record<string, unknown>) {
   }
 }
 
+export const guard = '/opt/homebrew/bin/agent-guard';
+
 export default function agentGuard(pi: ExtensionAPI) {
-  const guard = '/opt/homebrew/bin/agent-guard';
   pi.on('tool_call', (event, ctx) => {
     const guardInput = guardEvent(event.toolName, event.input);
     if (!guardInput) return;

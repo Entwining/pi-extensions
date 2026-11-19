@@ -8,7 +8,7 @@ Install the package from Git:
 pi install git:github.com/Entwining/pi-extensions
 ```
 
-This loads every extension listed in the package. `agent-guard.ts` requires Apple Silicon macOS and Agent Guard [installed through Homebrew](https://github.com/Entwining/agent-guard/blob/main/docs/setup.md#install); without it, every guarded tool call is blocked. If you do not use Agent Guard, disable that extension with [`pi config`](https://pi.dev/docs/latest/packages#select-package-resources) or a package filter.
+This loads every extension listed in the package. `agent-guard.ts` requires Apple Silicon macOS and Agent Guard [installed through Homebrew](https://github.com/Entwining/agent-guard/blob/main/docs/setup.md#install); without it, every guarded tool call is blocked. If you do not use Agent Guard, disable that extension with [`pi config`](https://pi.dev/docs/latest/packages#select-package-resources) or a package filter. `sandbox.ts` blocks shell commands, `write`, and `edit` on systems other than macOS and until [its policy file](usage.md#os-sandbox) exists.
 
 Pi's [package filters](https://pi.dev/docs/latest/packages#select-package-resources) select extensions in `~/.pi/agent/settings.json`. For example, this entry loads only inline skill invocation and the session footer:
 

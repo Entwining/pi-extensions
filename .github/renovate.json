@@ -19,10 +19,20 @@
       "automerge": true
     },
     {
-      "description": "The Pi host pins its TUI to the same version, and the footer adapter depends on Pi internals. Pi updates wait one day instead of three; the workflow's npm check accepts them because it exempts @earendil-works packages, as Pi's own npmCommand does.",
-      "matchPackageNames": ["@earendil-works/pi-coding-agent", "@earendil-works/pi-tui"],
+      "description": "The Pi host pins its AI and TUI packages to the same version, and the footer adapter depends on Pi internals. Pi updates wait one day instead of three; the workflow's npm check accepts them because it exempts @earendil-works packages, as Pi's own npmCommand does.",
+      "matchPackageNames": [
+        "@earendil-works/pi-ai",
+        "@earendil-works/pi-coding-agent",
+        "@earendil-works/pi-tui"
+      ],
       "groupName": "Pi",
       "minimumReleaseAge": "1 day"
+    },
+    {
+      "description": "Sandbox Runtime enforces the OS sandbox, and no PR check runs a real sandbox, so every update waits for review and a check on macOS.",
+      "matchPackageNames": ["@anthropic-ai/sandbox-runtime"],
+      "groupName": "Sandbox Runtime",
+      "automerge": false
     },
     {
       "description": "CI tests with the Bun version in packageManager, and @types/bun follows Bun's version numbers.",

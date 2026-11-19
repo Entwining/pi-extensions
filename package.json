@@ -1,7 +1,7 @@
 {
   "name": "@entwining/pi-extensions",
   "private": true,
-  "description": "Pi extensions for inline skill invocation, session IDs in the footer, Agent Guard tool-call checks, and a reasoning workaround.",
+  "description": "Pi extensions for inline skill invocation, session IDs in the footer, Agent Guard tool-call checks, an OS sandbox for shell commands, and a reasoning workaround.",
   "keywords": [
     "pi-package"
   ],
@@ -16,7 +16,11 @@
     "release": "semantic-release",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "@anthropic-ai/sandbox-runtime": "0.0.83"
+  },
   "devDependencies": {
+    "@earendil-works/pi-ai": "1.5.2",
     "@earendil-works/pi-coding-agent": "1.5.2",
     "@earendil-works/pi-tui": "1.5.2",
     "@semantic-release/commit-analyzer": "13.0.1",
@@ -30,6 +34,7 @@
     "typescript": "7.0.2"
   },
   "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
     "@earendil-works/pi-coding-agent": "*",
     "@earendil-works/pi-tui": "*"
   },
@@ -38,6 +43,7 @@
     "extensions": [
       "./extensions/agent-guard.ts",
       "./extensions/inline-skill-invocation.ts",
+      "./extensions/sandbox.ts",
       "./extensions/session-id-footer.ts",
       "./extensions/strip-reasoning-filler.ts"
     ]
