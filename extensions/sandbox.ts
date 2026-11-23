@@ -10,6 +10,12 @@ import {
 } from '@earendil-works/pi-coding-agent';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Type } from 'typebox';
+import {
+  approveUnsandboxed,
+  escalationGuideline,
+  escalationParameters,
+} from '../lib/sandbox-escalation';
 import { removeTree } from '../lib/sandbox-paths';
 import { quote, runInSandbox, startSandbox, type Sandbox } from '../lib/sandbox-session';
 import { expandPath, resolveWriteTarget, writeToolDenial } from '../lib/sandbox-write-policy';
@@ -52,7 +58,7 @@ export default function sandbox(pi: ExtensionAPI) {
   const failures = new WeakMap<Owner, string>();
   let lifecycle = Promise.resolve();
   const unavailable = (owner?: Owner) =>
-    `The OS sandbox for commands is unavailable, so Pi blocks this call: ${(owner && failures.get(owner)) ?? 'The sandbox has not finished starting.'} Commands stay blocked until the user fixes this and restarts Pi, or restarts it with --no-sandbox.`;
+    `The OS sandbox for commands is unavailable, so Pi blocks this call: ${(owner && failures.get(owner)) ?? 'The sandbox has not finished starting.'} Commands stay blocked until the user fixes this and restarts Pi, or restarts it with --no-sandbox; until then a bash call runs outside the sandbox only if the user approves it.`;
   // Session starts and shutdowns run one at a time, so a shutdown that arrives
   // while a sandbox is starting stops that sandbox once it is up.
   const serially = (step: () => Promise<void>) =>
@@ -87,24 +93,17 @@ export default function sandbox(pi: ExtensionAPI) {
       if (active?.owner === owner) await stop();
     });
 
+  const local = (): BashOperations => createLocalBashOperations({ shellPath });
   const operationsFor = (owner?: Owner): BashOperations => ({
     async exec(...args) {
-      if (owner && unsandboxed.has(owner)) {
-        return createLocalBashOperations({ shellPath }).exec(...args);
-      }
+      if (owner && unsandboxed.has(owner)) return local().exec(...args);
       if (!active || active.owner !== owner) throw new Error(unavailable(owner));
       return runInSandbox(active, ...args);
     },
   });
-  const bashFor = (owner?: Owner) =>
-    createBashToolDefinition(process.cwd(), {
-      operations: operationsFor(owner),
-      // Pi applies shellCommandPrefix only to the built-in bash tool this one replaces.
-      spawnHook: (context) =>
-        settings.shellCommandPrefix
-          ? { ...context, command: `${settings.shellCommandPrefix}\n${context.command}` }
-          : context,
-    });
+  const bashFor = (operations: BashOperations) =>
+    createBashToolDefinition(process.cwd(), { operations });
+  const bash = bashFor(operationsFor());
 
   pi.registerFlag('no-sandbox', {
     description: 'Run bash commands without the OS sandbox',
@@ -112,9 +111,22 @@ export default function sandbox(pi: ExtensionAPI) {
     default: false,
   });
   pi.registerTool({
-    ...bashFor(),
-    execute: (toolCallId, params, signal, onUpdate, ctx) =>
-      bashFor(ctx.sessionManager).execute(toolCallId, params, signal, onUpdate, ctx),
+    ...bash,
+    parameters: Type.Object({ ...bash.parameters.properties, ...escalationParameters }),
+    promptGuidelines: [...(bash.promptGuidelines ?? []), escalationGuideline],
+    // Pi runs this after every tool_call handler, Agent Guard's included, has
+    // passed the call, so the dialog shows the command as it will run.
+    async execute(toolCallId, { unsandboxed: requested, justification, ...params }, ...rest) {
+      const [signal, , ctx] = rest;
+      const owner = ctx.sessionManager;
+      // Pi applies shellCommandPrefix only to the built-in bash tool this one replaces.
+      const prefix = settings.shellCommandPrefix;
+      const call = { ...params, command: prefix ? `${prefix}\n${params.command}` : params.command };
+      if (!requested || unsandboxed.has(owner))
+        return bashFor(operationsFor(owner)).execute(toolCallId, call, ...rest);
+      await approveUnsandboxed(call.command, justification, ctx, signal);
+      return bashFor(local()).execute(toolCallId, call, ...rest);
+    },
     // Registering a tool otherwise activates it, which would give bash to a
     // session whose tool selection leaves it out. Pi's default selection names
     // bash, so this definition stays active there.
@@ -178,7 +190,7 @@ export default function sandbox(pi: ExtensionAPI) {
         return;
       }
       // On Linux, Sandbox Runtime drops write denies that are globs, such as
-      // the one for nested .pi directories, so the policy cannot be applied.
+      // the one for .pi directories one level down, so the policy cannot be applied.
       if (process.platform !== 'darwin') {
         throw new Error(`The sandbox supports only macOS, not ${process.platform}.`);
       }

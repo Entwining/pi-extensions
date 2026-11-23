@@ -3,11 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mock } from 'bun:test';
 import * as runtime from '@anthropic-ai/sandbox-runtime';
+import { removeTrailingGlobSuffix } from '@anthropic-ai/sandbox-runtime/dist/sandbox/sandbox-utils.js';
 import { cleanupSessionResources } from '@earendil-works/pi-ai';
 import type {
   BashOperations,
   ExtensionAPI,
-  ExtensionContext,
+  ExtensionToolContext,
   ToolCallEvent,
   ToolCallEventResult,
   ToolDefinition,
@@ -38,8 +39,9 @@ export const manager = {
   resets: 0,
   resetError: undefined as Error | undefined,
 };
+// On macOS Sandbox Runtime drops a trailing /** from spelled entries.
 const spelled = (entries: runtime.FilesystemPathEntry[] = []) =>
-  entries.filter((entry) => typeof entry === 'string');
+  entries.flatMap((entry) => (typeof entry === 'string' ? [removeTrailingGlobSuffix(entry)] : []));
 const marked = (entries: runtime.FilesystemPathEntry[] = []) =>
   entries.flatMap((entry) => (typeof entry === 'string' ? [] : [entry.path]));
 mock.module('@anthropic-ai/sandbox-runtime', () => ({
@@ -87,11 +89,11 @@ export function cleanup() {
   rmSync(root, { recursive: true, force: true });
 }
 
-type Handler = (event: unknown, ctx: ExtensionContext) => unknown;
+type Handler = (event: unknown, ctx: ExtensionToolContext) => unknown;
 let sessions = 0;
 export function start(
   flags: Record<string, boolean> = {},
-  settings: { shellPath?: string } = {},
+  settings: { shellPath?: string; shellCommandPrefix?: string } = {},
   cwd = project,
   sessionId?: string,
 ) {
@@ -107,8 +109,18 @@ export function start(
   // A session of this loaded copy, as when an SDK host shares one resource loader.
   const session = (sessionId = `session-${++sessions}`) => {
     const notices: string[] = [];
-    const sessionManager = { getSessionId: () => sessionId };
-    const ui = { notify: (text: string) => notices.push(text), setStatus: () => {} };
+    const dialogs: string[] = [];
+    // The user's answer to a confirmation dialog, and whether the mode has dialogs.
+    const user = { hasUI: true, approves: false };
+    const sessionManager = { getSessionId: () => sessionId, getSessionFile: () => undefined };
+    const ui = {
+      notify: (text: string) => notices.push(text),
+      setStatus: () => {},
+      confirm: async (title: string, message: string) => {
+        dialogs.push(`${title}\n${message}`);
+        return user.approves;
+      },
+    };
     // As in Pi, a disposed session's context throws.
     let disposed = false;
     const live = <T>(value: T) => {
@@ -125,11 +137,16 @@ export function start(
       get ui() {
         return live(ui);
       },
-    } as unknown as ExtensionContext;
+      get hasUI() {
+        return live(user.hasUI);
+      },
+    } as unknown as ExtensionToolContext;
     const call = (event: string, payload: unknown) => handlers.get(event)?.(payload, ctx);
     return {
       sessionId,
       notices,
+      dialogs,
+      user,
       tools,
       started: Promise.resolve(call('session_start', { type: 'session_start' })),
       restart: async () => call('session_start', { type: 'session_start' }),
@@ -139,6 +156,15 @@ export function start(
         cleanupSessionResources(sessionId);
       },
       another: (id?: string) => session(id),
+      // The output of the registered bash tool, or the error it reports to the model.
+      bash: async (params: Record<string, unknown>) => {
+        try {
+          const result = await tools[0]!.execute('fixture', params, undefined, undefined, ctx);
+          return result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
+        } catch (error) {
+          return `error: ${error instanceof Error ? error.message : error}`;
+        }
+      },
       operations: () =>
         (call('user_bash', { type: 'user_bash' }) as UserBashEventResult | undefined)?.operations,
       toolCall: (toolName: string, input: Record<string, unknown>) =>
@@ -159,5 +185,6 @@ export async function run(operations: BashOperations | undefined, command: strin
   return { exitCode: result?.exitCode, output };
 }
 
+// The last writable entry unless a linked worktree's Git directory follows it.
 export const privateTmp = () =>
-  (manager.initialized!.filesystem.allowWrite[1] as { path: string }).path;
+  (manager.initialized!.filesystem.allowWrite.at(-1) as { path: string }).path;

@@ -29,6 +29,11 @@
       "minimumReleaseAge": "1 day"
     },
     {
+      "description": "Pi maps the typebox import to its own copy, so the pinned version moves with Pi. It keeps the default release age because the workflow's npm check does not exempt it.",
+      "matchPackageNames": ["typebox"],
+      "groupName": "Pi"
+    },
+    {
       "description": "Sandbox Runtime enforces the OS sandbox, and no PR check runs a real sandbox, so every update waits for review and a check on macOS.",
       "matchPackageNames": ["@anthropic-ai/sandbox-runtime"],
       "groupName": "Sandbox Runtime",

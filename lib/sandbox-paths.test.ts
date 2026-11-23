@@ -1,8 +1,16 @@
-import { mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import {
+  existsSync,
+  mkdirSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, beforeEach, expect, test } from 'bun:test';
+import { getDefaultWritePaths } from '@anthropic-ai/sandbox-runtime';
 import { guard } from '../extensions/agent-guard';
 import {
   agentDir,
@@ -12,6 +20,7 @@ import {
   manager,
   outside,
   prepare,
+  privateTmp,
   project,
   root,
   run,
@@ -22,29 +31,17 @@ beforeEach(prepare);
 afterAll(cleanup);
 
 test('protects the paths Pi loads or runs, both as spelled and after symbolic links', async () => {
-  const repos = join(outside, 'repos');
-  const worktrees = join(outside, 'worktrees');
-  const otherPi = join(outside, 'other', '.pi');
-  const allowWrite = [
-    join(outside, 'later', 'new'),
-    join(otherPi, 'settings.json'),
-    `${repos}/**`,
-    `${worktrees}/*/src/**`,
-    { path: '~', literal: true },
-  ];
-  writeFileSync(
-    configPath,
-    JSON.stringify({ ...config, filesystem: { ...config.filesystem, allowWrite } }),
-  );
   const settings = join(outside, 'settings.json');
   const skills = join(outside, 'skills');
   const bin = join(outside, 'bin');
   const relativeBin = join(outside, 'relative-bin');
-  for (const dir of [skills, bin, relativeBin, repos, worktrees, otherPi])
-    mkdirSync(dir, { recursive: true });
+  for (const dir of [skills, bin, relativeBin]) mkdirSync(dir, { recursive: true });
   symlinkSync(settings, join(agentDir, 'settings.json'));
   symlinkSync(skills, join(agentDir, 'skills'));
   symlinkSync(bin, join(outside, 'bin-link'));
+  // Starting the sandbox runs no program found on PATH, which may be the project's.
+  const gitRan = join(outside, 'git-ran');
+  writeFileSync(join(bin, 'git'), `#!/bin/sh\ntouch '${gitRan}'\n`, { mode: 0o755 });
   const path = process.env.PATH;
   // Node looks a relative PATH entry up from Pi's working directory, not the session's,
   // and an empty one names the working directory.
@@ -52,6 +49,7 @@ test('protects the paths Pi loads or runs, both as spelled and after symbolic li
   const session = start();
   await session.started;
   process.env.PATH = path;
+  expect(existsSync(gitRan)).toBe(false);
   expect(session.notices).toEqual([]);
   expect(manager.initialized?.filesystem.denyWrite).toEqual(
     expect.arrayContaining([
@@ -62,21 +60,66 @@ test('protects the paths Pi loads or runs, both as spelled and after symbolic li
       { path: relativeBin, literal: true },
       { path: project, literal: true },
       { path: guard, literal: true },
-      // A glob or a path not created yet stands for its nearest existing directory.
-      join(outside, '**', '.pi'),
-      join(repos, '**', '.pi'),
-      join(worktrees, '**', '.pi'),
-      join(realpathSync(homedir()), '**', '.pi'),
-      // An entry inside a project's .pi stands for that .pi.
-      { path: otherPi, literal: true },
     ]),
   );
-  expect(
-    session.toolCall('write', { path: join(otherPi, 'settings.json'), content: '' })?.block,
-  ).toBe(true);
   expect(await run(session.operations(), 'true')).toEqual({ exitCode: 0, output: '' });
   rmSync(join(agentDir, 'settings.json'));
   rmSync(join(agentDir, 'skills'));
+  await session.stop();
+});
+
+test('protects .pi at the top of every writable directory and directly inside it', async () => {
+  // Not created yet, with glob characters in its name.
+  const fresh = join(outside, 'fresh[1]');
+  // A file now, which commands may replace with a directory.
+  const built = join(outside, 'out.js');
+  const repos = join(outside, 'repos');
+  const worktrees = join(outside, 'worktrees');
+  const otherPi = join(outside, 'other', '.pi');
+  for (const dir of [repos, join(worktrees, 'w', 'src'), otherPi])
+    mkdirSync(dir, { recursive: true });
+  writeFileSync(built, '');
+  const allowWrite = [
+    { path: fresh, literal: true },
+    { path: built, literal: true },
+    `${repos}/**`,
+    `${worktrees}/*/src/**`,
+    // Its fixed part does not exist yet.
+    `${project}/packages/*/src/**`,
+    join(otherPi, 'settings.json'),
+  ];
+  const filesystem = { ...config.filesystem, allowWrite };
+  writeFileSync(configPath, JSON.stringify({ ...config, filesystem }));
+  const session = start();
+  await session.started;
+  // Sandbox Runtime adds writable directories of its own, as far as they exist on this host.
+  const defaults = getDefaultWritePaths()
+    .filter((dir) => statSync(dir, { throwIfNoEntry: false })?.isDirectory())
+    .map((dir) => realpathSync(dir));
+  expect(manager.initialized?.filesystem.denyWrite).toEqual(
+    expect.arrayContaining([
+      ...defaults.flatMap((dir) => [
+        { path: join(dir, '.pi'), literal: true },
+        join(dir, '*', '.pi'),
+      ]),
+      // The static check allows nothing inside a glob, so the denies show what it matches.
+      join(worktrees, '*', 'src', '.pi'),
+      join(worktrees, '*', 'src', '*', '.pi'),
+      join(project, '?ackages', '*', 'src', '*', '.pi'),
+    ]),
+  );
+  const denial = (path: string) => session.toolCall('write', { path, content: '' })?.reason;
+  expect(denial(join(project, 'packages', 'README.md'))).toBeUndefined();
+  expect(denial(built)).toBeUndefined();
+  rmSync(built);
+  mkdirSync(built);
+  for (const dir of [fresh, built, repos, privateTmp()]) {
+    expect(denial(join(dir, 'x', 'y', '.pi', 'settings.json'))).toBeUndefined();
+    expect(denial(join(dir, '.pi', 'settings.json'))).toContain('protected by');
+    expect(denial(join(dir, 'x', '.pi', 'settings.json'))).toContain('protected by');
+  }
+  // An entry inside a project's .pi stands for that .pi.
+  expect(denial(join(otherPi, 'settings.json'))).toContain('protected by');
   await session.stop();
 });
 
