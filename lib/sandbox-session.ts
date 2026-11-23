@@ -7,7 +7,7 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { readPolicy } from './sandbox-config';
-import { literal, protectedPaths } from './sandbox-paths';
+import { linkedGitDir, literal, protectedPaths } from './sandbox-paths';
 import { compileWritePolicy, type WritePolicy } from './sandbox-write-policy';
 
 type Runtime = typeof import('@anthropic-ai/sandbox-runtime');
@@ -64,19 +64,40 @@ export async function startSandbox(session: Start): Promise<Sandbox> {
   try {
     const sessionCwd = realpathSync(session.cwd);
     const mandatory = macGetMandatoryDenyEntries(config.filesystem.allowGitConfig);
+    // A linked worktree keeps its index and refs in the repository's shared
+    // Git directory. Its hooks and config stay denied, as Sandbox Runtime
+    // denies them in a working directory's own .git.
+    const shared = linkedGitDir(sessionCwd);
+    const allowWrite = [
+      ...config.filesystem.allowWrite,
+      literal(sessionCwd),
+      literal(tmp),
+      ...(shared ? [literal(shared)] : []),
+    ];
     const denyWrite = await protectedPaths({
       ...session,
       sessionCwd,
       processCwd: realpathSync(process.cwd()),
-      allowWrite: config.filesystem.allowWrite,
+      allowWrite,
       mandatory,
     });
+    const sharedDeny = shared
+      ? [
+          literal(join(shared, 'hooks')),
+          ...(config.filesystem.allowGitConfig ? [] : [literal(join(shared, 'config'))]),
+        ]
+      : [];
     await manager.initialize({
       ...config,
+      network: {
+        ...config.network,
+        // Tools such as tsx bind their IPC sockets in TMPDIR.
+        allowUnixSockets: [...(config.network.allowUnixSockets ?? []), tmp],
+      },
       filesystem: {
         ...config.filesystem,
-        allowWrite: [...config.filesystem.allowWrite, literal(sessionCwd), literal(tmp)],
-        denyWrite: [...config.filesystem.denyWrite, ...denyWrite],
+        allowWrite,
+        denyWrite: [...config.filesystem.denyWrite, ...denyWrite, ...sharedDeny],
       },
     });
     const sandbox: Sandbox = {

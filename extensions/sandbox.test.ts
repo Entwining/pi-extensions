@@ -39,11 +39,12 @@ test('wraps commands with a private TMPDIR and keeps file tools inside the write
       { path: configPath, literal: true },
       { path: packageRoot, literal: true },
       { path: join(project, '.pi'), literal: true },
-      join(project, '**', '.pi'),
+      join(project, '*', '.pi'),
       { path: join(project, '.git', 'hooks'), literal: true },
       join(project, '**', '.git', 'hooks', '**'),
     ]),
   );
+  expect(manager.initialized?.network.allowUnixSockets).toEqual([tmp]);
   const result = await run(session.operations(), 'printf %s "$TMPDIR"; test -d "$TMPDIR"');
   expect(result).toEqual({ exitCode: 0, output: tmp });
   // The shell that starts the wrapper runs before Seatbelt applies, so it must
@@ -67,6 +68,9 @@ test('wraps commands with a private TMPDIR and keeps file tools inside the write
   expect(existsSync(join(outside, 'env-ran'))).toBe(false);
 
   expect(session.toolCall('write', { path: 'notes.txt', content: '' })).toBeUndefined();
+  expect(
+    session.toolCall('write', { path: 'node_modules/pkg/.pi/settings.json', content: '' }),
+  ).toBeUndefined();
   for (const path of [
     join(outside, 'notes.txt'),
     'locked/notes.txt',
@@ -87,6 +91,18 @@ test('wraps commands with a private TMPDIR and keeps file tools inside the write
   await session.stop();
   expect(manager.resets).toBe(before + 1);
   await expect(run(session.operations(), 'true')).rejects.toThrow('The session has ended.');
+});
+
+test('lets commands use sockets in the private TMPDIR as well as those the policy allows', async () => {
+  const network = { ...config.network, allowUnixSockets: ['/var/run/example.sock'] };
+  writeFileSync(configPath, JSON.stringify({ ...config, network }));
+  const session = start();
+  await session.started;
+  expect(manager.initialized?.network.allowUnixSockets).toEqual([
+    '/var/run/example.sock',
+    privateTmp(),
+  ]);
+  await session.stop();
 });
 
 test.each([
@@ -133,6 +149,9 @@ test('--no-sandbox leaves commands and file tools to Pi in the sessions started 
   ).toBeUndefined();
   expect(session.toolCall('powershell', { command: 'Get-Date' })).toBeUndefined();
   expect(session.notices.join('\n')).toContain('--no-sandbox');
+  // Commands already run outside, so a request to leave the sandbox needs no approval.
+  expect(await session.bash({ command: 'echo ran', unsandboxed: true })).toBe('ran\n');
+  expect(session.dialogs).toEqual([]);
   // An SDK host can clear the flag for the next session of the same loaded copy.
   flags['no-sandbox'] = false;
   const next = session.another();
