@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Type } from 'typebox';
 import {
-  approveUnsandboxed,
+  escalationApproval,
   escalationGuideline,
   escalationParameters,
 } from '../lib/sandbox-escalation';
@@ -47,6 +47,7 @@ export default function sandbox(pi: ExtensionAPI) {
       Reflect.deleteProperty(globalThis, runtimeOwner);
   };
   const configPath = join(getAgentDir(), 'extensions', 'sandbox.json');
+  const approval = escalationApproval(pi, getAgentDir(), (owner) => active?.owner === owner);
   const packageRoot = fileURLToPath(new URL('..', import.meta.url));
   let settings: { shellPath?: string; shellCommandPrefix?: string } = {};
   let shellPath: string | undefined;
@@ -87,11 +88,13 @@ export default function sandbox(pi: ExtensionAPI) {
       release();
     }
   };
-  const end = (owner: Owner) =>
-    serially(async () => {
+  const end = (owner: Owner) => {
+    approval.stop(owner);
+    return serially(async () => {
       failures.set(owner, 'The session has ended.');
       if (active?.owner === owner) await stop();
     });
+  };
 
   const local = (): BashOperations => createLocalBashOperations({ shellPath });
   const operationsFor = (owner?: Owner): BashOperations => ({
@@ -124,7 +127,7 @@ export default function sandbox(pi: ExtensionAPI) {
       const call = { ...params, command: prefix ? `${prefix}\n${params.command}` : params.command };
       if (!requested || unsandboxed.has(owner))
         return bashFor(operationsFor(owner)).execute(toolCallId, call, ...rest);
-      await approveUnsandboxed(call.command, justification, ctx, signal);
+      await approval.approve(call.command, justification, ctx, signal, { toolCallId, prefix });
       return bashFor(local()).execute(toolCallId, call, ...rest);
     },
     // Registering a tool otherwise activates it, which would give bash to a
@@ -194,6 +197,8 @@ export default function sandbox(pi: ExtensionAPI) {
       if (process.platform !== 'darwin') {
         throw new Error(`The sandbox supports only macOS, not ${process.platform}.`);
       }
+      // While the context is live: a session disposed while its sandbox starts makes it throw.
+      approval.start(ctx);
       // A session that ended without a shutdown hands over once it has stopped.
       await Reflect.get(globalThis, runtimeOwner)?.stopping;
       if (Reflect.get(globalThis, runtimeOwner)) {

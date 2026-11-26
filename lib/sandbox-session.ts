@@ -4,7 +4,6 @@ import {
   type BashOperations,
 } from '@earendil-works/pi-coding-agent';
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { readPolicy } from './sandbox-config';
 import { linkedGitDir, literal, protectedPaths } from './sandbox-paths';
@@ -27,7 +26,10 @@ const outerShell = createLocalBashOperations({ shellPath: '/bin/sh' });
 export async function runInSandbox(sandbox: Sandbox, ...[command, cwd, options]: ExecArgs) {
   // sandbox-runtime sets TMPDIR to its shared /tmp/claude in front of the
   // inner shell, so the session's private directory is exported inside it.
-  const inner = `export TMPDIR=${quote(sandbox.tmp)}\n${command}`;
+  // Node's fetch reads the proxy variables, through which Sandbox Runtime
+  // allows network access, only with NODE_USE_ENV_PROXY set, and Sandbox
+  // Runtime sets that only on Windows.
+  const inner = `export TMPDIR=${quote(sandbox.tmp)} NODE_USE_ENV_PROXY=1\n${command}`;
   const wrapped = await sandbox.manager.wrapWithSandbox(
     inner,
     sandbox.shell,
@@ -59,7 +61,10 @@ export async function startSandbox(session: Start): Promise<Sandbox> {
   // Resolved where Pi checked that it exists, so the inner shell is the same
   // file whatever directory a command runs in.
   const shell = resolve(getShellConfig(session.shellPath).shell);
-  const tmp = realpathSync(mkdtempSync(join(tmpdir(), 'pi-sandbox-')));
+  // Not under tmpdir(): macOS limits a Unix socket path to 104 bytes, and the
+  // per-user temporary directory in /var/folders leaves too little of that
+  // for tools that bind sockets in directories of their own inside TMPDIR.
+  const tmp = realpathSync(mkdtempSync('/tmp/pi-sandbox-'));
   const manager = runtime.SandboxManager;
   try {
     const sessionCwd = realpathSync(session.cwd);

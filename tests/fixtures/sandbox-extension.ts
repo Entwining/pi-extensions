@@ -15,6 +15,7 @@ import type {
   UserBashEventResult,
 } from '@earendil-works/pi-coding-agent';
 import { quote } from '../../lib/sandbox-session';
+import { judgeModel } from './sandbox-judge-model';
 
 // Drives the sandbox extension in an isolated agent directory. The OS sandbox
 // itself is exercised against real Seatbelt outside the test suite; here the
@@ -99,7 +100,15 @@ export function start(
 ) {
   const handlers = new Map<string, Handler>();
   const tools: ToolDefinition[] = [];
+  // The current branch's custom entries, which Pi appends for the current
+  // session, and its user messages.
+  const entries: (
+    | { type: 'custom'; customType: string; data: unknown }
+    | { type: 'message'; message: { role: 'user'; content: string } }
+  )[] = [];
   sandbox({
+    appendEntry: (customType: string, data: unknown) =>
+      entries.push({ type: 'custom', customType, data }),
     registerFlag: () => {},
     registerTool: (tool: ToolDefinition) => tools.push(tool),
     getFlag: (name: string) => flags[name],
@@ -110,14 +119,21 @@ export function start(
   const session = (sessionId = `session-${++sessions}`) => {
     const notices: string[] = [];
     const dialogs: string[] = [];
-    // The user's answer to a confirmation dialog, and whether the mode has dialogs.
-    const user = { hasUI: true, approves: false };
-    const sessionManager = { getSessionId: () => sessionId, getSessionFile: () => undefined };
+    // The user's answer to a confirmation dialog, whether the dialog fails, and
+    // whether the mode has dialogs.
+    const user = { hasUI: true, approves: false, dialogFails: false };
+    const sessionManager = {
+      getSessionId: () => sessionId,
+      getSessionFile: () => undefined,
+      getBranch: () => entries,
+    };
+    const { judge, modelRegistry } = judgeModel();
     const ui = {
       notify: (text: string) => notices.push(text),
       setStatus: () => {},
       confirm: async (title: string, message: string) => {
         dialogs.push(`${title}\n${message}`);
+        if (user.dialogFails) throw new Error('The dialog failed.');
         return user.approves;
       },
     };
@@ -140,6 +156,9 @@ export function start(
       get hasUI() {
         return live(user.hasUI);
       },
+      model: { provider: 'test', id: 'judge' },
+      thinkingLevel: 'high',
+      modelRegistry,
     } as unknown as ExtensionToolContext;
     const call = (event: string, payload: unknown) => handlers.get(event)?.(payload, ctx);
     return {
@@ -148,6 +167,18 @@ export function start(
       dialogs,
       user,
       tools,
+      entries,
+      judge,
+      // Input as the handlers see it, before Pi records it as a user message,
+      // if it does: an extension may handle it, or a queue may hold it.
+      typed: (text: string, source = 'interactive') =>
+        call('input', { type: 'input', text, source }),
+      deliver: (text: string) =>
+        entries.push({ type: 'message', message: { role: 'user', content: text } }),
+      input: async (text: string, source = 'interactive') => {
+        await call('input', { type: 'input', text, source });
+        entries.push({ type: 'message', message: { role: 'user', content: text } });
+      },
       started: Promise.resolve(call('session_start', { type: 'session_start' })),
       restart: async () => call('session_start', { type: 'session_start' }),
       stop: async () => call('session_shutdown', { type: 'session_shutdown' }),
@@ -157,9 +188,9 @@ export function start(
       },
       another: (id?: string) => session(id),
       // The output of the registered bash tool, or the error it reports to the model.
-      bash: async (params: Record<string, unknown>) => {
+      bash: async (params: Record<string, unknown>, signal?: AbortSignal) => {
         try {
-          const result = await tools[0]!.execute('fixture', params, undefined, undefined, ctx);
+          const result = await tools[0]!.execute('fixture', params, signal, undefined, ctx);
           return result.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
         } catch (error) {
           return `error: ${error instanceof Error ? error.message : error}`;

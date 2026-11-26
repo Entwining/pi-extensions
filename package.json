@@ -44,8 +44,8 @@
   "pi": {
     "extensions": [
       "./extensions/agent-guard.ts",
-      "./extensions/inline-skill-invocation.ts",
       "./extensions/sandbox.ts",
+      "./extensions/inline-skill-invocation.ts",
       "./extensions/session-id-footer.ts",
       "./extensions/strip-reasoning-filler.ts"
     ]

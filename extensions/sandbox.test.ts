@@ -1,4 +1,4 @@
-import { existsSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeEach, expect, test } from 'bun:test';
@@ -12,6 +12,7 @@ import {
   prepare,
   privateTmp,
   project,
+  root,
   run,
   setPlatform,
   start,
@@ -47,6 +48,14 @@ test('wraps commands with a private TMPDIR and keeps file tools inside the write
   expect(manager.initialized?.network.allowUnixSockets).toEqual([tmp]);
   const result = await run(session.operations(), 'printf %s "$TMPDIR"; test -d "$TMPDIR"');
   expect(result).toEqual({ exitCode: 0, output: tmp });
+  // Node's fetch ignores the sandbox proxy without it, also when Pi runs without it.
+  const proxyEnv = process.env.NODE_USE_ENV_PROXY;
+  delete process.env.NODE_USE_ENV_PROXY;
+  expect(await run(session.operations(), 'printf %s "$NODE_USE_ENV_PROXY"')).toEqual({
+    exitCode: 0,
+    output: '1',
+  });
+  if (proxyEnv !== undefined) process.env.NODE_USE_ENV_PROXY = proxyEnv;
   // The shell that starts the wrapper runs before Seatbelt applies, so it must
   // not read a startup file that commands can write.
   const startup = join(outside, 'startup');
@@ -96,12 +105,22 @@ test('wraps commands with a private TMPDIR and keeps file tools inside the write
 test('lets commands use sockets in the private TMPDIR as well as those the policy allows', async () => {
   const network = { ...config.network, allowUnixSockets: ['/var/run/example.sock'] };
   writeFileSync(configPath, JSON.stringify({ ...config, network }));
+  // As long as a macOS per-user temporary directory in /var/folders.
+  const tmpEnv = process.env.TMPDIR;
+  process.env.TMPDIR = join(root, 'T'.repeat(60));
+  mkdirSync(process.env.TMPDIR, { recursive: true });
   const session = start();
   await session.started;
+  if (tmpEnv === undefined) delete process.env.TMPDIR;
+  else process.env.TMPDIR = tmpEnv;
   expect(manager.initialized?.network.allowUnixSockets).toEqual([
     '/var/run/example.sock',
     privateTmp(),
   ]);
+  // Tools bind sockets in directories of their own there, as a cargo cache
+  // wrapper does, and macOS refuses a socket path of 104 bytes or more.
+  const socket = join(privateTmp(), 'mbx-session-cAjTKA', 'cache-agent.sock');
+  expect(Buffer.byteLength(socket)).toBeLessThan(104);
   await session.stop();
 });
 

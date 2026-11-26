@@ -24,7 +24,7 @@ const { stripTerminalSequences, visibleWidth } = await import('@earendil-works/p
 const hooks = new Map([
   ['agent-guard.ts', ['tool_call']],
   ['inline-skill-invocation.ts', ['context', 'input', 'session_start']],
-  ['sandbox.ts', ['session_shutdown', 'session_start', 'tool_call', 'user_bash']],
+  ['sandbox.ts', ['input', 'session_shutdown', 'session_start', 'tool_call', 'user_bash']],
   ['session-id-footer.ts', ['session_start']],
   ['strip-reasoning-filler.ts', ['before_provider_request']],
 ]);
@@ -53,10 +53,12 @@ for (const { source, expected } of cases) {
   const result = loader.getExtensions();
   assert.deepEqual(result.errors, []);
   assert.deepEqual(result.warnings ?? [], []);
-  assert.deepEqual(
-    result.extensions.map((entry) => basename(entry.resolvedPath)).sort(),
-    [...expected].sort(),
-  );
+  const loaded = result.extensions.map((entry) => basename(entry.resolvedPath));
+  assert.deepEqual([...loaded].sort(), [...expected].sort());
+  // Input handlers receive the text earlier ones returned, and the sandbox
+  // judge must read what the user typed.
+  if (loaded.includes('inline-skill-invocation.ts'))
+    assert.ok(loaded.indexOf('sandbox.ts') < loaded.indexOf('inline-skill-invocation.ts'));
   for (const entry of result.extensions) {
     assert.equal(entry.sourceInfo.baseDir, packageRoot);
     assert.equal(entry.sourceInfo.source, packageRoot);
