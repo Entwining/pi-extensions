@@ -16,7 +16,7 @@ The [Agent Guard adapter](docs/usage.md#agent-guard) checks shell, file, and sea
 
 ## Sandbox shell commands
 
-The [command sandbox](docs/usage.md#os-sandbox) runs the `bash` tool and `!` commands inside a macOS Seatbelt sandbox built with [Sandbox Runtime](https://github.com/anthropics/sandbox-runtime). It holds `write` and `edit` to the same write policy. A `bash` call runs outside it only after you approve that command. Pi and its other extensions stay outside it.
+The [command sandbox](docs/usage.md#os-sandbox) runs the `bash` tool and `!` commands inside a macOS Seatbelt sandbox built with [Sandbox Runtime](https://github.com/anthropics/sandbox-runtime). It holds `write` and `edit` to the same write policy. A `bash` call runs outside it only after you approve that command; [an optional judge](docs/usage.md#shadow-the-dialog-with-a-judge) records beside your answer whether it would have let the command run without asking. Pi and its other extensions stay outside it.
 
 ## Filter replayed DeepSeek reasoning
 
